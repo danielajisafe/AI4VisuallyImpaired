@@ -14,6 +14,7 @@ import android.media.Image;
 import com.google.ar.core.Anchor;
 import com.google.ar.core.Frame;
 import com.google.ar.core.Pose;
+import com.google.ar.core.exceptions.NotYetAvailableException;
 import com.google.ar.sceneform.AnchorNode;
 import com.google.ar.sceneform.FrameTime;
 import com.google.ar.sceneform.Scene;
@@ -69,13 +70,16 @@ public class MainActivity extends AppCompatActivity implements Scene.OnUpdateLis
         }
 
         setContentView(R.layout.activity_main);
-
-        arFragment = (ArFragment) getSupportFragmentManager().findFragmentById(R.id.ux_fragment);
-        tvDistance = findViewById(R.id.tvDistance);
-
-
         initModel();
+        arFragment = (ArFragment) getSupportFragmentManager().findFragmentById(R.id.ux_fragment);
 
+
+        tvDistance = findViewById(R.id.tvDistance);
+        // Update itself will be called frequently (at a rate ~30fps), so we can simply remove the "setOnTap" listener.
+        // and, let it call the desired function.
+        arFragment.getArSceneView().getScene().addOnUpdateListener(this::onFrame);
+
+        /*
         arFragment.setOnTapArPlaneListener((hitResult, plane, motionEvent) -> {
             if (cubeRenderable == null)
                 return;
@@ -104,7 +108,7 @@ public class MainActivity extends AppCompatActivity implements Scene.OnUpdateLis
 
         });
 
-
+        */
     }
 
     public boolean checkIsSupportedDeviceOrFinish(final Activity activity) {
@@ -146,16 +150,68 @@ public class MainActivity extends AppCompatActivity implements Scene.OnUpdateLis
         }
     }
 
+    private void onFrame(FrameTime frameTime) {
+        Log.d("STATE", "CALLED --" + frameTime.getDeltaSeconds());
+        Frame frame = arFragment.getArSceneView().getArFrame();
+        Log.d("STATE", "Get frame. Now try to get image");
+
+        Image image;
+        try {
+            image = frame.acquireCameraImage();
+        }  catch (NotYetAvailableException e){
+            e.printStackTrace();
+            return;
+        }
+        InputImage inputImage = InputImage.fromMediaImage(image, 0);
+        Log.d("STATE", "Image - Height: " + image.getHeight() + ", Width: " + image.getWidth());
+        // release image resource
+        image.close();
+        Log.d("STATE", "Image acquired!");
+        Log.d("STATE", "Running object detector!");
+
+        /* When running the code below, it crashes without any warning ...
+        objectDetector.process(inputImage)
+                .addOnSuccessListener(
+                        new OnSuccessListener<List<DetectedObject>>() {
+                            @Override
+                            public void onSuccess(List<DetectedObject> detectedObjects) {
+                                Log.d("SOME", "look here ");
+                                for (DetectedObject detectedObject: detectedObjects) {
+                                    Rect boundingBox = detectedObject.getBoundingBox();
+                                    float objx = (float) ((boundingBox.right + boundingBox.left) / 2.0);
+                                    float objy = (float) ((boundingBox.bottom + boundingBox.top) / 2.0);
+                                    Log.d("STATE", "Object detected X:" + objx + ", Y:" + objy);
+                                    //randAnchors = testFrame.hitTest(objx, objy);
+                                    //anchor = randAnchors.get(0).createAnchor();
+                                    //Integer trackingId = detectedObject.getTrackingId();
+                                }
+                            }
+                        })
+                .addOnFailureListener(
+                        new OnFailureListener() {
+                            @Override
+                            public void onFailure(@NonNull Exception e) {
+                                Log.e(TAG, "Object detection failed!", e);
+                            }
+                        });
+         */
+
+    }
+
     @Override
     public void onUpdate(FrameTime frameTime) {
+        Frame testFrame = arFragment.getArSceneView().getArFrame();
+        Image image;
+        Log.d("STATE", "ON UPDATE ACTIVATED");
         try
         {
-            Image image = testFrame.acquireCameraImage();
+            image = testFrame.acquireCameraImage();
         }
-        catch (exception(type) e(object))‏
-        {
-            //error handling code
+        catch (NotYetAvailableException e){
+            e.printStackTrace();
+            return;
         }
+
         InputImage inputImage = InputImage.fromMediaImage(image, 0);
         List<HitResult> randAnchors = testFrame.hitTest(500, 500);
         Anchor anchor = randAnchors.get(0).createAnchor();
@@ -168,11 +224,12 @@ public class MainActivity extends AppCompatActivity implements Scene.OnUpdateLis
                                 Log.d("SOME", "look here ");
                                 for (DetectedObject detectedObject: detectedObjects) {
                                     Rect boundingBox = detectedObject.getBoundingBox();
-                                    float objx = (boundingBox.right + boundingBox.left) / 2;
-                                    float objy = (boundingBox.bottom + boundingBox.top) / 2;
-                                    randAnchors = testFrame.hitTest(objx, objy);
-                                    anchor = randAnchors.get(0).createAnchor();
-                                    Integer trackingId = detectedObject.getTrackingId();
+                                    float objx = (float) ((boundingBox.right + boundingBox.left) / 2.0);
+                                    float objy = (float) ((boundingBox.bottom + boundingBox.top) / 2.0);
+                                    Log.d("STATE", "Object detected X:" + objx + ", Y:" + objy);
+                                    //randAnchors = testFrame.hitTest(objx, objy);
+                                    //anchor = randAnchors.get(0).createAnchor();
+                                    //Integer trackingId = detectedObject.getTrackingId();
                                 }
                             }
                         })
