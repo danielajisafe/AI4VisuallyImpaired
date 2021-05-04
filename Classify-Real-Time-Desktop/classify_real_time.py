@@ -132,9 +132,9 @@ while True:
         input_tensor = tf.convert_to_tensor(frame[None, :, :, ::-1].copy(), dtype=tf.float32)
         # detection: standard detection outcomes, predictions: extra information such as object keypoints
         detections, predictions, _ = detector(input_tensor)
-        pred_boxes = detections['detection_boxes'].numpy().reshape(-1)
         pred_classes = detections['detection_classes'].numpy().reshape(-1) + 1 # offset by 1 for this model
         pred_scores = detections['detection_scores'].numpy().reshape(-1)
+        pred_boxes = detections['detection_boxes'].numpy().reshape(-1, 4)
 
         # get prediction with high confidence ( > .5)
         # note that the prediction is sorted already
