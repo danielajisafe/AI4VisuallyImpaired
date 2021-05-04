@@ -149,12 +149,10 @@ while True:
             filtered_scores.append(pred_score)
 
         # index 0 is the top prediction
-        human_string_n = filtered_classes[0]
-
-        if score > .5:
+        if len(filtered_classes) > 0:
+            human_string_n = filtered_classes[0]
 
             '''MANUAL CORRECTIONS FOR FOR SOME FALSE DETECTIONS (4)'''
-
             if human_string_n == "stethoscope":
                 human_string_n = "Headphones"
             if human_string_n == "spatula":
