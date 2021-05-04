@@ -16,6 +16,7 @@ from threading import Thread
 import cv2
 from pydub import AudioSegment
 import random
+from object_detector import get_model_detection_function, load_image_into_numpy_array
 
 model_dir = '/tmp/imagenet'
 DATA_URL = 'http://download.tensorflow.org/models/image/imagenet/inception-2015-12-05.tgz'
@@ -102,48 +103,6 @@ class NodeLookup(object):
         return self.node_lookup[node_id]
 
 
-def create_graph():
-
-    # Creates graph from saved graph_def.pb.
-    with tf.gfile.FastGFile(os.path.join(
-            model_dir, 'classify_image_graph_def.pb'), 'rb') as f:
-        graph_def = tf.GraphDef()
-        graph_def.ParseFromString(f.read())
-        _ = tf.import_graph_def(graph_def, name='')
-
-    # Dan 
-    return graph_def
-
-
-def maybe_download_and_extract():
-    # Download and extract model tar file
-    dest_directory = model_dir
-    if not os.path.exists(dest_directory):
-        os.makedirs(dest_directory)
-    filename = DATA_URL.split('/')[-1]
-    filepath = os.path.join(dest_directory, filename)
-    if not os.path.exists(filepath):
-        def _progress(count, block_size, total_size):
-            sys.stdout.write(
-                '\r>> Downloading %s %.1f%%' %
-                (filename,
-                 float(
-                     count *
-                     block_size) /
-                    float(total_size) *
-                    100.0))
-            sys.stdout.flush()
-        filepath, _ = urllib.request.urlretrieve(DATA_URL, filepath, _progress)
-        print()
-        statinfo = os.stat(filepath)
-        print('Successfully downloaded', filename, statinfo.st_size, 'bytes.')
-    tarfile.open(filepath, 'r:gz').extractall(dest_directory)
-
-
-# Download and create graph
-maybe_download_and_extract()
-create_graph()
-
 # Variables declarations
 frame_count = 0
 score = 0
@@ -153,107 +112,111 @@ pred = 0
 last = 0
 human_string = None
 
+
+# initialize detector - may see lots of warning here
+detector, label_map, category_idx = get_model_detection_function()
+
 # Init video stream
 vs = VideoStream(src=0).start()
+# Dan
+while True:
+    frame = vs.read()
+    frame_count += 1
 
-# Start tensroflow session
-with tf.Session() as sess:
-    softmax_tensor = sess.graph.get_tensor_by_name('softmax:0')
+    # Only run every 5 frames
+    if frame_count % 5 == 0:
 
-    # Dan
+        # Save the image as the fist layer of inception is a DecodeJpeg
+        cv2.imwrite("current_frame.jpg", frame)
+        frame = frame[..., ::-1] # OpenCV is int BGR format, make it RGB
+        input_tensor = tf.convert_to_tensor(frame[None], dtype=tf.float32)
+        # detection: standard detection outcomes, predictions: extra information such as object keypoints
+        detections, predictions, _ = detector(input_tensor)
+        pred_boxes = detections['detection_boxes'].numpy().reshape(-1)
+        pred_classes = detections['detection_classes'].numpy().reshape(-1) + 1 # offset by 1 for this model
+        pred_scores = detections['detection_scores'].numpy().reshape(-1)
 
+        # get prediction with high confidence ( > .5)
+        # note that the prediction is sorted already
+        filtered_classes = []
+        filtered_boxes = []
+        filtered_scores = []
+        for i, pred_score in enumerate(pred_scores):
+            if pred_score < .5:
+                break
+            filtered_classes.append(category_idx[pred_classes[i]]['name'])
+            filtered_boxes.append(pred_boxes[i])
+            filtered_scores.append(pred_score)
 
-    while True:
-        frame = vs.read()
-        frame_count += 1
+        # index 0 is the top prediction
+        human_string_n = filtered_classes[0]
 
-        # Only run every 5 frames
-        if frame_count % 5 == 0:
+        if score > .5:
 
-            # Save the image as the fist layer of inception is a DecodeJpeg
-            cv2.imwrite("current_frame.jpg", frame)
+            '''MANUAL CORRECTIONS FOR FOR SOME FALSE DETECTIONS (4)'''
 
-            image_data = tf.gfile.FastGFile("./current_frame.jpg", 'rb').read()
-            predictions = sess.run(
-                softmax_tensor, {
-                    'DecodeJpeg/contents:0': image_data})
+            if human_string_n == "stethoscope":
+                human_string_n = "Headphones"
+            if human_string_n == "spatula":
+                human_string_n = "fork"
+            if human_string_n == "iPod":
+                human_string_n = "SmartPhone"
 
-            predictions = np.squeeze(predictions)
-            node_lookup = NodeLookup()
+            human_string = human_string_n
 
-            # change n_pred for more predictions
-            n_pred = 1 # Single Objects for now
-            top_k = predictions.argsort()[-n_pred:][::-1]
-            for node_id in top_k:
-                human_string_n = node_lookup.id_to_string(node_id)
-                score = predictions[node_id]
+            lst = human_string.split()
+            human_string = " ".join(lst[0:2])
+            human_string_filename = str(lst[0])
 
-            if score > .5:
-                
-                '''MANUAL CORRECTIONS FOR FOR SOME FALSE DETECTIONS (4)'''
-                
-                if human_string_n == "stethoscope":
-                    human_string_n = "Headphones"
-                if human_string_n == "spatula":
-                    human_string_n = "fork"
-                if human_string_n == "iPod":
-                    human_string_n = "SmartPhone"
+        current = time.time()
+        fps = frame_count / (current - start)
 
-                human_string = human_string_n
+    # Speech module
+    if last > 40 and pygame.mixer.music.get_busy(
+    ) == False and human_string == human_string_n:
+        pred += 1
+        name = human_string_filename + ".mp3"
 
-                lst = human_string.split()
-                human_string = " ".join(lst[0:2])
-                human_string_filename = str(lst[0])
+        # Only get from google if we dont have a saved one
+        if not os.path.isfile(name):
 
-            current = time.time()
-            fps = frame_count / (current - start)
+            assitive_words = random.sample(["I see a ", "Probably seeing a ", "I think I see a", \
+                "I am confident I see a ", "It seems like a ", "Seems like a "], 1)
 
-        # Speech module
-        if last > 40 and pygame.mixer.music.get_busy(
-        ) == False and human_string == human_string_n:
-            pred += 1
-            name = human_string_filename + ".mp3"
+            #print("assitive_words :", assitive_words)
+            #STOP
 
-            # Only get from google if we dont have a saved one
-            if not os.path.isfile(name):
+            navigate_cmnds = ""
 
-                assitive_words = random.sample(["I see a ", "Probably seeing a ", "I think I see a", \
-                    "I am confident I see a ", "It seems like a ", "Seems like a "], 1)
+            tts = gTTS(text= assitive_words[0] + human_string + navigate_cmnds, lang='en')
+            tts.save(name)
 
-                #print("assitive_words :", assitive_words)
-                #STOP
+        last = 0
+        #pygame.mixer.music.load(name)
+        tts = AudioSegment.from_mp3(name).export('myogg.ogg', format='ogg')
+        pygame.mixer.music.load(tts)
+        pygame.mixer.music.play()
 
-                navigate_cmnds = ""
-                
-                tts = gTTS(text= assitive_words[0] + human_string + navigate_cmnds, lang='en')
-                tts.save(name)
+        #delete mp3 immediately
+        #os.remove(name)
 
-            last = 0
-            #pygame.mixer.music.load(name)
-            tts = AudioSegment.from_mp3(name).export('myogg.ogg', format='ogg')
-            pygame.mixer.music.load(tts)
-            pygame.mixer.music.play()
+    # Show info during some time
+    if last < 40 and frame_count > 10:
+        cv2.putText(frame, human_string, (20, 400),
+                    cv2.FONT_HERSHEY_TRIPLEX, 1, (255, 255, 255))
+        cv2.putText(frame, str(np.round(score, 2)) + "%",
+                    (20, 440), cv2.FONT_HERSHEY_TRIPLEX, 1, (255, 255, 255))
 
-            #delete mp3 immediately
-            #os.remove(name)
+    if frame_count > 20:
+        cv2.putText(frame, "fps: " + str(np.round(fps, 2)),
+                    (460, 460), cv2.FONT_HERSHEY_TRIPLEX, 1, (255, 255, 255))
 
-        # Show info during some time
-        if last < 40 and frame_count > 10:
-            cv2.putText(frame, human_string, (20, 400),
-                        cv2.FONT_HERSHEY_TRIPLEX, 1, (255, 255, 255))
-            cv2.putText(frame, str(np.round(score, 2)) + "%",
-                        (20, 440), cv2.FONT_HERSHEY_TRIPLEX, 1, (255, 255, 255))
+    cv2.imshow("Frame", frame)
+    last += 1
 
-        if frame_count > 20:
-            cv2.putText(frame, "fps: " + str(np.round(fps, 2)),
-                        (460, 460), cv2.FONT_HERSHEY_TRIPLEX, 1, (255, 255, 255))
-
-        cv2.imshow("Frame", frame)
-        last += 1
-
-        # if the 'q' key is pressed, stop the loop
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
+    # if the 'q' key is pressed, stop the loop
+    if cv2.waitKey(1) & 0xFF == ord("q"):
+        break
 
 # cleanup everything
 vs.stop()
