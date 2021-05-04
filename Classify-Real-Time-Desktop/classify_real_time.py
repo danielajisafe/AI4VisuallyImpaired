@@ -128,8 +128,8 @@ while True:
 
         # Save the image as the fist layer of inception is a DecodeJpeg
         cv2.imwrite("current_frame.jpg", frame)
-        frame = frame[..., ::-1] # OpenCV is int BGR format, make it RGB
-        input_tensor = tf.convert_to_tensor(frame[None], dtype=tf.float32)
+        #OpenCV is int BGR format, make it RGB
+        input_tensor = tf.convert_to_tensor(frame[None, :, :, ::-1].copy(), dtype=tf.float32)
         # detection: standard detection outcomes, predictions: extra information such as object keypoints
         detections, predictions, _ = detector(input_tensor)
         pred_boxes = detections['detection_boxes'].numpy().reshape(-1)
