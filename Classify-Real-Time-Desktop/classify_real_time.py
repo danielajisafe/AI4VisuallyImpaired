@@ -15,6 +15,7 @@ import os
 from threading import Thread
 import cv2
 from pydub import AudioSegment
+import random
 
 model_dir = '/tmp/imagenet'
 DATA_URL = 'http://download.tensorflow.org/models/image/imagenet/inception-2015-12-05.tgz'
@@ -110,6 +111,9 @@ def create_graph():
         graph_def.ParseFromString(f.read())
         _ = tf.import_graph_def(graph_def, name='')
 
+    # Dan 
+    return graph_def
+
 
 def maybe_download_and_extract():
     # Download and extract model tar file
@@ -156,6 +160,9 @@ vs = VideoStream(src=0).start()
 with tf.Session() as sess:
     softmax_tensor = sess.graph.get_tensor_by_name('softmax:0')
 
+    # Dan
+
+
     while True:
         frame = vs.read()
         frame_count += 1
@@ -175,11 +182,12 @@ with tf.Session() as sess:
             node_lookup = NodeLookup()
 
             # change n_pred for more predictions
-            n_pred = 1
+            n_pred = 1 # Single Objects for now
             top_k = predictions.argsort()[-n_pred:][::-1]
             for node_id in top_k:
                 human_string_n = node_lookup.id_to_string(node_id)
                 score = predictions[node_id]
+
             if score > .5:
                 
                 '''MANUAL CORRECTIONS FOR FOR SOME FALSE DETECTIONS (4)'''
@@ -206,9 +214,18 @@ with tf.Session() as sess:
             pred += 1
             name = human_string_filename + ".mp3"
 
-            # Only get from google if we dont have it
+            # Only get from google if we dont have a saved one
             if not os.path.isfile(name):
-                tts = gTTS(text="I see a " + human_string, lang='en')
+
+                assitive_words = random.sample(["I see a ", "Probably seeing a ", "I think I see a", \
+                    "I am confident I see a ", "It seems like a ", "Seems like a "], 1)
+
+                #print("assitive_words :", assitive_words)
+                #STOP
+
+                navigate_cmnds = ""
+                
+                tts = gTTS(text= assitive_words[0] + human_string + navigate_cmnds, lang='en')
                 tts.save(name)
 
             last = 0
@@ -216,6 +233,9 @@ with tf.Session() as sess:
             tts = AudioSegment.from_mp3(name).export('myogg.ogg', format='ogg')
             pygame.mixer.music.load(tts)
             pygame.mixer.music.play()
+
+            #delete mp3 immediately
+            #os.remove(name)
 
         # Show info during some time
         if last < 40 and frame_count > 10:
