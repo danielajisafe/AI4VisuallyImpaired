@@ -94,37 +94,6 @@ public class MainActivity extends AppCompatActivity implements Scene.OnUpdateLis
         // Update itself will be called frequently (at a rate ~30fps), so we can simply remove the "setOnTap" listener.
         // and, let it call the desired function.
         arFragment.getArSceneView().getScene().addOnUpdateListener(this::onFrame);
-
-        /*
-        arFragment.setOnTapArPlaneListener((hitResult, plane, motionEvent) -> {
-            if (cubeRenderable == null)
-                return;
-
-            // Creating Anchor.
-            Frame testFrame = arFragment.getArSceneView().getArFrame();
-            List<HitResult> randAnchors = testFrame.hitTest(1079, 2279);
-            Anchor anchor = randAnchors.get(0).createAnchor();
-            Log.d("SOME", "Coordinates " + motionEvent.getX() + motionEvent.getY());
-//            Anchor anchor = hitResult.createAnchor();
-
-            AnchorNode anchorNode = new AnchorNode(anchor);
-            anchorNode.setParent(arFragment.getArSceneView().getScene());
-
-            clearAnchor();
-
-            currentAnchor = anchor;
-            currentAnchorNode = anchorNode;
-
-            TransformableNode node = new TransformableNode(arFragment.getTransformationSystem());
-            node.setRenderable(cubeRenderable);
-            node.setParent(anchorNode);
-            arFragment.getArSceneView().getScene().addOnUpdateListener(this);
-            arFragment.getArSceneView().getScene().addChild(anchorNode);
-            node.select();
-
-        });
-
-        */
     }
 
     public boolean checkIsSupportedDeviceOrFinish(final Activity activity) {
@@ -192,10 +161,9 @@ public class MainActivity extends AppCompatActivity implements Scene.OnUpdateLis
 
 
     private void onFrame(FrameTime frameTime) {
-//        Log.d("STATE", "CALLED --" + frameTime.getDeltaSeconds());
         ArSceneView view = arFragment.getArSceneView();
-//        Log.d("STATE", "view : " + view.getWidth() + " height" + view.getHeight());
         Frame frame = view.getArFrame();
+
 //        Log.d("STATE", "Get frame. Now try to get image");
 
         Image image;
@@ -205,21 +173,16 @@ public class MainActivity extends AppCompatActivity implements Scene.OnUpdateLis
             e.printStackTrace();
             return;
         }
-
-        Log.d("STATE", "Running object detector!");
-
         // When running the code below, it crashes without any warning ...
         Bitmap bitmap = Bitmap.createBitmap(view.getWidth(), view.getHeight(), Bitmap.Config.ARGB_8888);
-//        if (count == 0) {
-//            String location = saveToInternalStorage(bitmap);
-//            Log.d("SAVE", location);
-//        }
         Pose cameraPose = frame.getCamera().getPose();
+
+        Log.d("STATE", "Running object detector!");
 
         HandlerThread handlerThread = new HandlerThread("Pixel Copier");
         handlerThread.start();
         PixelCopy.request(view, bitmap, copyResult -> {
-            if (copyResult == PixelCopy.SUCCESS){
+            if (copyResult == PixelCopy.SUCCESS) {
                 InputImage inputImage = InputImage.fromBitmap(bitmap, 0);
                 objectDetector.process(inputImage)
                         .addOnSuccessListener(
@@ -267,7 +230,7 @@ public class MainActivity extends AppCompatActivity implements Scene.OnUpdateLis
                                         Log.e(TAG, "Object detection failed!", e);
                                     }
                                 });
-            }
+                }
             }
         , new Handler(handlerThread.getLooper()));
         // release image resource
@@ -276,85 +239,5 @@ public class MainActivity extends AppCompatActivity implements Scene.OnUpdateLis
 
     @Override
     public void onUpdate(FrameTime frameTime) {
-//        Frame testFrame = arFragment.getArSceneView().getArFrame();
-//        Image image;
-//        Log.d("STATE", "ON UPDATE ACTIVATED");
-//        try
-//        {
-//            image = testFrame.acquireCameraImage();
-//        }
-//        catch (NotYetAvailableException e){
-//            e.printStackTrace();
-//            return;
-//        }
-//
-//        InputImage inputImage = InputImage.fromMediaImage(image, 0);
-////        List<HitResult> randAnchors = testFrame.hitTest(500, 500);
-//        Anchor anchor = randAnchors.get(0).createAnchor();
-//
-//        objectDetector.process(inputImage)
-//                .addOnSuccessListener(
-//                        new OnSuccessListener<List<DetectedObject>>() {
-//                            @Override
-//                            public void onSuccess(List<DetectedObject> detectedObjects) {
-//                                Log.d("SOME", "look here ");
-//                                for (DetectedObject detectedObject: detectedObjects) {
-//                                    Rect boundingBox = detectedObject.getBoundingBox();
-//                                    float objx = (float) ((boundingBox.right + boundingBox.left) / 2.0);
-//                                    float objy = (float) ((boundingBox.bottom + boundingBox.top) / 2.0);
-//                                    Log.d("STATE", "Object detected X:" + objx + ", Y:" + objy);
-//                                    //randAnchors = testFrame.hitTest(objx, objy);
-//                                    //anchor = randAnchors.get(0).createAnchor();
-//                                    //Integer trackingId = detectedObject.getTrackingId();
-//                                    if (currentAnchorNode != null) {
-//                                        Pose objectPose = currentAnchor.getPose();
-//                                        Pose cameraPose = testFrame.getCamera().getPose();
-//
-//                                        float dx = objectPose.tx() - cameraPose.tx();
-//                                        float dy = objectPose.ty() - cameraPose.ty();
-//                                        float dz = objectPose.tz() - cameraPose.tz();
-//
-//                                        ///Compute the straight-line distance.
-//                                        float distanceMeters = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
-//                                        tvDistance.setText("Distance from camera: " + distanceMeters + " metres");
-//                                    }
-//                                }
-//                            }
-//                        })
-//                .addOnFailureListener(
-//                        new OnFailureListener() {
-//                            @Override
-//                            public void onFailure(@NonNull Exception e) {
-//                                Log.e(TAG, "Object detection failed!", e);
-//                            }
-//                        });
-//        // The list of detected objects contains one item if multiple
-//        // object detection wasn't enabled.
-//
-//
-//        Log.d("API123", "onUpdateframe... current anchor node " + (currentAnchorNode == null));
-//
-//
-//        if (currentAnchorNode != null) {
-//            Pose objectPose = currentAnchor.getPose();
-//            Pose cameraPose = testFrame.getCamera().getPose();
-//
-//            float dx = objectPose.tx() - cameraPose.tx();
-//            float dy = objectPose.ty() - cameraPose.ty();
-//            float dz = objectPose.tz() - cameraPose.tz();
-//
-////            List<HitResult> randAnchors = frame.hitTest(objectPose.tx(), objectPose.ty());
-////            Log.d("SOME", "look here " + (randAnchors.get(0)));
-//
-//            ///Compute the straight-line distance.
-//            float distanceMeters = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
-//            tvDistance.setText("Distance from camera: " + distanceMeters + " metres");
-//
-//            /*float[] distance_vector = currentAnchor.getPose().inverse()
-//                    .compose(cameraPose).getTranslation();
-//            float totalDistanceSquared = 0;
-//            for (int i = 0; i < 3; ++i)
-//                totalDistanceSquared += distance_vector[i] * distance_vector[i];*/
-//        }
     }
 }
